@@ -65,37 +65,47 @@ func init() {
 
 // Progress ... Entrypoint of our Cloud Function
 func Progress(w http.ResponseWriter, r *http.Request) {
-	var id = fmt.Sprintf(path.Base(r.URL.Path))
+	cleaned_path := path.Clean(r.URL.Path)
+	num, deno := path.Split(cleaned_path)
+	num = fmt.Sprintf(path.Base(num))
 
-	if percentage, err := strconv.Atoi(id); err == nil {
+	if num == "/" {
+		num = deno
+		deno = "100"
+	}
 
-		// Read (with the intention to overwrite) success, warning, and danger colors if provided
-		successColor := r.URL.Query().Get("successColor")
-		warningColor := r.URL.Query().Get("warningColor")
-		dangerColor := r.URL.Query().Get("dangerColor")
+	if num_val, err := strconv.Atoi(num); err == nil {
+		if deno_val, err := strconv.Atoi(deno); err == nil {
 
-		data := Data{
-			BackgroundColor: grey,
-			Percentage:      percentage,
-			Progress:        percentage - (percentage / 10),
-			PickedColor:     pickColor(percentage, successColor, warningColor, dangerColor),
+			// Read (with the intention to overwrite) success, warning, and danger colors if provided
+			successColor := r.URL.Query().Get("successColor")
+			warningColor := r.URL.Query().Get("warningColor")
+			dangerColor := r.URL.Query().Get("dangerColor")
+			percentage := num_val * 100 / deno_val
+
+			data := Data{
+				BackgroundColor: grey,
+				Percentage:      percentage,
+				Progress:        percentage - (percentage / 10),
+				PickedColor:     pickColor(percentage, successColor, warningColor, dangerColor),
+			}
+
+			tpl, err := template.ParseFiles("progress.html")
+
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			buf := new(bytes.Buffer)
+
+			err = tpl.Execute(buf, data)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			fmt.Printf("The percentage is: %d\n", percentage)
+			w.Header().Add("Content-Type", "image/svg+xml")
+			fmt.Fprintf(w, buf.String())
 		}
-
-		tpl, err := template.ParseFiles("progress.html")
-
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		buf := new(bytes.Buffer)
-
-		err = tpl.Execute(buf, data)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		fmt.Printf("The percentage is: %d\n", percentage)
-		w.Header().Add("Content-Type", "image/svg+xml")
-		fmt.Fprintf(w, buf.String())
 	}
 }
